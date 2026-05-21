@@ -120,21 +120,54 @@ function parseConfidence(raw?: string) {
   }
   return Math.min(100, Math.max(0, parsed));
 }
-
 function parseNewsAnalysis(raw: string): NewsAnalysis {
   const normalized = normalizeResponse(raw);
-  const verdict = findSection(normalized, ["verdict", "decision", "outcome", "result"]) || "Undetermined";
-  const confidence = parseConfidence(findSection(normalized, ["confidence", "score", "certainty"]));
+
+  const verdictMatch =
+    normalized.match(/Verdict:\s*(.*)/i);
+
+  const confidenceMatch =
+    normalized.match(/Confidence:\s*(\d+)%/i);
+
+  const reasonMatch =
+    normalized.match(
+      /Reason:\s*([\s\S]*?)(Warning Signs:|What user should verify next:|LinkedIn Post:|$)/i
+    );
+
+  const warningMatch =
+    normalized.match(
+      /Warning Signs:\s*([\s\S]*?)(What user should verify next:|LinkedIn Post:|$)/i
+    );
+
+  const verifyMatch =
+    normalized.match(
+      /What user should verify next:\s*([\s\S]*?)(LinkedIn Post:|$)/i
+    );
+
+  const linkedinMatch =
+    normalized.match(/LinkedIn Post:\s*([\s\S]*)/i);
+
+  const verdict = verdictMatch?.[1]?.trim() || "Undetermined";
+
+  const confidence = confidenceMatch
+    ? Number(confidenceMatch[1])
+    : 0;
+
   const reasoning =
-    findSection(normalized, ["reasoning", "analysis", "explanation", "rationale"]) ||
-    findSection(normalized, ["reason"]) ||
-    "No AI reasoning was provided by the backend.";
-  const warnings = splitList(findSection(normalized, ["warning signs", "warnings", "red flags", "issues", "concerns"]));
-  const suggestions = splitList(findSection(normalized, ["suggestion", "recommendation", "next steps", "verify", "action items"]));
+    reasonMatch?.[1]?.trim() ||
+    "No AI reasoning was provided.";
+
+  const warnings = warningMatch?.[1]
+    ? splitList(warningMatch[1])
+    : [];
+
+  const suggestions = verifyMatch?.[1]
+    ? splitList(verifyMatch[1])
+    : [];
+
   const linkedInPost =
-    findSection(normalized, ["linkedin generated post", "linkedin post", "social share", "post"]) ||
-    `AI says this news is ${verdict.toLowerCase()} with ${confidence}% confidence.`;
-  const sources = splitList(findSection(normalized, ["source verification", "sources", "origin", "reference"]));
+    linkedinMatch?.[1]?.trim() ||
+    "No LinkedIn post generated.";
 
   return {
     verdict,
@@ -143,10 +176,36 @@ function parseNewsAnalysis(raw: string): NewsAnalysis {
     warnings,
     suggestions,
     linkedInPost,
-    sources,
+    sources: [],
     raw: normalized,
   };
 }
+// function parseNewsAnalysis(raw: string): NewsAnalysis {
+//   const normalized = normalizeResponse(raw);
+//   const verdict = findSection(normalized, ["verdict", "decision", "outcome", "result"]) || "Undetermined";
+//   const confidence = parseConfidence(findSection(normalized, ["confidence", "score", "certainty"]));
+//   const reasoning =
+//     findSection(normalized, ["reasoning", "analysis", "explanation", "rationale"]) ||
+//     findSection(normalized, ["reason"]) ||
+//     "No AI reasoning was provided by the backend.";
+//   const warnings = splitList(findSection(normalized, ["warning signs", "warnings", "red flags", "issues", "concerns"]));
+//   const suggestions = splitList(findSection(normalized, ["suggestion", "recommendation", "next steps", "verify", "action items"]));
+//   const linkedInPost =
+//     findSection(normalized, ["linkedin generated post", "linkedin post", "social share", "post"]) ||
+//     `AI says this news is ${verdict.toLowerCase()} with ${confidence}% confidence.`;
+//   const sources = splitList(findSection(normalized, ["source verification", "sources", "origin", "reference"]));
+
+//   return {
+//     verdict,
+//     confidence,
+//     reasoning,
+//     warnings,
+//     suggestions,
+//     linkedInPost,
+//     sources,
+//     raw: normalized,
+//   };
+// }
 
 function parseImageAnalysis(raw: string): ImageAnalysis {
   const normalized = normalizeResponse(raw);
@@ -301,66 +360,155 @@ export default function HomePage() {
     return formData;
   };
 
-  const handleVerify = async () => {
-    setErrorMessage(null);
-    setResult(null);
-    setCopyMessage("");
-    const formData = buildFormData();
-    if (!formData) {
+  // const handleVerify = async () => {
+  //   setErrorMessage(null);
+  //   setResult(null);
+  //   setCopyMessage("");
+  //   const formData = buildFormData();
+  //   if (!formData) {
+  //     return;
+  //   }
+
+  //   const endpoint =
+  //     activeTab === "text"
+  //       ? "check-text"
+  //       : activeTab === "url"
+  //       ? "check-url"
+  //       : activeTab === "pdf"
+  //       ? "check-pdf"
+  //       : "check-image";
+
+  //   setLoading(true);
+
+  //   try {
+  //     const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
+  //       method: "POST",
+  //       body: formData,
+  //     });
+
+  //     const rawBody = await response.text();
+  //     if (!response.ok) {
+  //       throw new Error(rawBody || "Verification request failed.");
+  //     }
+
+  //     let parsedBody: unknown;
+  //     try {
+  //       parsedBody = JSON.parse(rawBody);
+  //     } catch {
+  //       parsedBody = rawBody;
+  //     }
+
+  //     const responseText =
+  //       typeof parsedBody === "string"
+  //         ? parsedBody
+  //         : parsedBody && typeof parsedBody === "object"
+  //         ? (parsedBody as Record<string, unknown>).result ||
+  //           (parsedBody as Record<string, unknown>).detail ||
+  //           (parsedBody as Record<string, unknown>).message ||
+  //           JSON.stringify(parsedBody, null, 2)
+  //         : rawBody;
+
+  //     if (activeTab === "image") {
+  //       setResult({ kind: "image", data: parseImageAnalysis(String(responseText)) });
+  //     } else {
+  //       setResult({ kind: "analysis", data: parseNewsAnalysis(String(responseText)) });
+  //     }
+  //   } catch (error) {
+  //     setErrorMessage((error as Error)?.message || "Unable to verify news. Try again.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+const handleVerify = async () => {
+  setErrorMessage(null);
+  setResult(null);
+  setCopyMessage("");
+
+  const formData = buildFormData();
+
+  if (!formData) {
+    return;
+  }
+
+  const endpoint =
+    activeTab === "text"
+      ? "check-text"
+      : activeTab === "url"
+      ? "check-url"
+      : activeTab === "pdf"
+      ? "check-pdf"
+      : "check-image";
+
+  setLoading(true);
+
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Backend request failed.");
+    }
+
+    const parsedBody = await response.json();
+
+    // IMAGE RESPONSE
+    if (activeTab === "image") {
+      const imageData = parsedBody;
+
+      const combinedImageText = `
+OCR Text:
+${imageData?.ocr_text || ""}
+
+Image Detection:
+${imageData?.ai_image_detection || ""}
+
+Fake News Analysis:
+${imageData?.fake_news_analysis?.verification_result || ""}
+
+LinkedIn Post:
+${imageData?.fake_news_analysis?.linkedin_post || ""}
+`;
+
+      setResult({
+        kind: "image",
+        data: parseImageAnalysis(combinedImageText),
+      });
+
       return;
     }
 
-    const endpoint =
-      activeTab === "text"
-        ? "check-text"
-        : activeTab === "url"
-        ? "check-url"
-        : activeTab === "pdf"
-        ? "check-pdf"
-        : "check-image";
+    // TEXT / URL / PDF RESPONSE
+    const verificationResult =
+      parsedBody?.verification_result || "";
 
-    setLoading(true);
+    const linkedinPost =
+      parsedBody?.linkedin_post || "";
 
-    try {
-      const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
-        method: "POST",
-        body: formData,
-      });
+    const combinedText = `
+${verificationResult}
 
-      const rawBody = await response.text();
-      if (!response.ok) {
-        throw new Error(rawBody || "Verification request failed.");
-      }
+LinkedIn Post:
+${linkedinPost}
+`;
 
-      let parsedBody: unknown;
-      try {
-        parsedBody = JSON.parse(rawBody);
-      } catch {
-        parsedBody = rawBody;
-      }
+    setResult({
+      kind: "analysis",
+      data: parseNewsAnalysis(combinedText),
+    });
 
-      const responseText =
-        typeof parsedBody === "string"
-          ? parsedBody
-          : parsedBody && typeof parsedBody === "object"
-          ? (parsedBody as Record<string, unknown>).result ||
-            (parsedBody as Record<string, unknown>).detail ||
-            (parsedBody as Record<string, unknown>).message ||
-            JSON.stringify(parsedBody, null, 2)
-          : rawBody;
+  } catch (error) {
+    console.error(error);
 
-      if (activeTab === "image") {
-        setResult({ kind: "image", data: parseImageAnalysis(String(responseText)) });
-      } else {
-        setResult({ kind: "analysis", data: parseNewsAnalysis(String(responseText)) });
-      }
-    } catch (error) {
-      setErrorMessage((error as Error)?.message || "Unable to verify news. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    setErrorMessage(
+      (error as Error)?.message ||
+        "Unable to verify news. Try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
   const activeInput = () => {
     if (activeTab === "text") {
       return (
