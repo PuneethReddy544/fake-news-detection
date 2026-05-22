@@ -17,7 +17,9 @@ import {
   Zap,
 } from "lucide-react";
 
+
 const BACKEND_BASE_URL = "https://fake-news-detection-bsys.onrender.com";
+
 
 type InputMode = "text" | "url" | "pdf" | "image";
 
@@ -39,6 +41,7 @@ interface ImageAnalysis {
   aiConfidence: number;
   highlights: string[];
   suggestions: string[];
+  linkedInPost: string;
   raw: string;
 }
 
@@ -221,6 +224,9 @@ function parseImageAnalysis(raw: string): ImageAnalysis {
   const aiConfidence = parseConfidence(findSection(normalized, ["confidence", "score", "certainty"]));
   const highlights = splitList(findSection(normalized, ["highlights", "key findings", "takeaways", "observations"]));
   const suggestions = splitList(findSection(normalized, ["suggestion", "recommendation", "next steps", "action items"]));
+  const linkedInPost =
+    findSection(normalized, ["linkedin generated post", "linkedin post", "linkedin blog post", "social share", "post"]) ||
+    "No LinkedIn post was returned.";
 
   return {
     ocrText,
@@ -229,6 +235,7 @@ function parseImageAnalysis(raw: string): ImageAnalysis {
     aiConfidence,
     highlights,
     suggestions,
+    linkedInPost,
     raw: normalized,
   };
 }
@@ -272,7 +279,6 @@ export default function HomePage() {
   const [urlValue, setUrlValue] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState>(null);
@@ -282,12 +288,6 @@ export default function HomePage() {
 
   const activeTabConfig = useMemo(() => tabs.find((tab) => tab.id === activeTab) ?? tabs[0], [activeTab]);
 
-  const previewUrl = useMemo(() => {
-    if (!imageFile) {
-      return "";
-    }
-    return URL.createObjectURL(imageFile);
-  }, [imageFile]);
 
   const handleSelectTab = (tabId: InputMode) => {
     setActiveTab(tabId);
@@ -313,7 +313,6 @@ export default function HomePage() {
     }
     if (activeTab === "image") {
       setImageFile(file);
-      setImagePreview(file ? URL.createObjectURL(file) : "");
     }
   };
 
@@ -360,6 +359,7 @@ export default function HomePage() {
     return formData;
   };
 
+<<<<<<< HEAD
   // const handleVerify = async () => {
   //   setErrorMessage(null);
   //   setResult(null);
@@ -476,6 +476,15 @@ ${imageData?.fake_news_analysis?.linkedin_post || ""}
         data: parseImageAnalysis(combinedImageText),
       });
 
+=======
+  const handleVerify = async () => {
+    setErrorMessage(null);
+    setResult(null);
+    setCopyMessage("");
+
+    const formData = buildFormData();
+    if (!formData) {
+>>>>>>> c2ec1eb (Add LinkedIn OAuth publisher feature)
       return;
     }
 
@@ -489,6 +498,7 @@ ${imageData?.fake_news_analysis?.linkedin_post || ""}
     const combinedText = `
 ${verificationResult}
 
+<<<<<<< HEAD
 LinkedIn Post:
 ${linkedinPost}
 `;
@@ -500,6 +510,68 @@ ${linkedinPost}
 
   } catch (error) {
     console.error(error);
+=======
+      const rawBody = await response.text();
+      let data: any = null;
+
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        data = rawBody;
+      }
+
+      if (!response.ok) {
+        const backendError =
+          typeof data === "object" && data !== null
+            ? data.detail || data.message || JSON.stringify(data)
+            : String(data || "Verification request failed.");
+
+        throw new Error(backendError);
+      }
+
+      if (activeTab === "image") {
+        const imageRaw = `
+OCR Text:
+${data?.ocr_text || "No OCR text was extracted."}
+
+Image Detection:
+${data?.ai_image_detection || "No image authenticity result was returned."}
+
+Fake News Analysis:
+${data?.fake_news_analysis?.verification_result || "No fake news analysis was returned."}
+`;
+
+        const parsedImage = parseImageAnalysis(imageRaw);
+
+        setResult({
+          kind: "image",
+          data: {
+            ...parsedImage,
+            linkedInPost:
+              data?.fake_news_analysis?.linkedin_post ||
+              "No LinkedIn post was returned.",
+          },
+        });
+      } else {
+        const parsedAnalysis = parseNewsAnalysis(
+          data?.verification_result || "No verification result was returned."
+        );
+
+        setResult({
+          kind: "analysis",
+          data: {
+            ...parsedAnalysis,
+            linkedInPost: data?.linkedin_post || "No LinkedIn post was returned.",
+          },
+        });
+      }
+    } catch (error) {
+      setErrorMessage((error as Error)?.message || "Unable to verify news. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+>>>>>>> c2ec1eb (Add LinkedIn OAuth publisher feature)
 
     setErrorMessage(
       (error as Error)?.message ||
@@ -926,7 +998,7 @@ ${linkedinPost}
                           <Copy className="h-4 w-4" /> Copy
                         </button>
                       </div>
-                      <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-zinc-300">
+                      <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-zinc-300 whitespace-pre-line">
                         {result.data.linkedInPost}
                       </div>
                       {copyMessage ? <p className="mt-3 text-sm text-emerald-300">{copyMessage}</p> : null}
@@ -984,6 +1056,25 @@ ${linkedinPost}
                       <h3 className="mt-3 text-xl font-semibold text-zinc-100">Claim intelligence</h3>
                       <p className="mt-4 text-sm leading-7 text-zinc-300">{result.data.fakeNewsAnalysis}</p>
                     </div>
+                  </div>
+
+                  <div className="rounded-[1.75rem] border border-white/10 bg-zinc-950/80 p-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm uppercase tracking-[0.28em] text-emerald-300/80">LinkedIn blog post</p>
+                        <h3 className="mt-3 text-xl font-semibold text-zinc-100">Shareable AI summary</h3>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(result.data.linkedInPost, setCopyMessage)}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 transition hover:border-emerald-400/30 hover:bg-white/10"
+                      >
+                        <Copy className="h-4 w-4" /> Copy
+                      </button>
+                    </div>
+                    <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-zinc-300 whitespace-pre-line">
+                      {result.data.linkedInPost}
+                    </div>
+                    {copyMessage ? <p className="mt-3 text-sm text-emerald-300">{copyMessage}</p> : null}
                   </div>
 
                   <div className="grid gap-6 xl:grid-cols-[1.15fr,_0.85fr]">
