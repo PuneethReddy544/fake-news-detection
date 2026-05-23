@@ -14,6 +14,13 @@ from utils import (
     extract_text_from_image,
     detect_ai_generated_image,
 )
+from utils import (
+    extract_text_from_url,
+    extract_text_from_pdf,
+    extract_text_from_image,
+    detect_ai_generated_image,
+    fetch_latest_news_by_topic,
+)
 
 app = FastAPI(title="AI Fake News Detector")
 
@@ -226,3 +233,7 @@ def post_to_linkedin(
         "status_code": status_code,
         "linkedin_response": result,
     }
+
+@app.post("/fetch-news")
+def fetch_news(topic: str = Form(...)):
+    return fetch_latest_news_by_topic(topic)

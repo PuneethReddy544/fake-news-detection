@@ -1,6 +1,6 @@
 "use client";
 
-import { DragEvent, useMemo, useRef, useState } from "react";
+import { DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -18,10 +18,11 @@ import {
 } from "lucide-react";
 
 
-const BACKEND_BASE_URL = "https://fake-news-detection-bsys.onrender.com";
+const BACKEND_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "https://fake-news-detection-bsys.onrender.com";
 
 
-type InputMode = "text" | "url" | "pdf" | "image";
+type InputMode = "text" | "url" | "pdf" | "image" | "news";
 
 interface NewsAnalysis {
   verdict: string;
@@ -44,6 +45,16 @@ interface ImageAnalysis {
   linkedInPost: string;
   raw: string;
 }
+
+interface FetchedArticle {
+  title: string;
+  description?: string;
+  content?: string;
+  url: string;
+  published_at?: string;
+  source?: string;
+}
+
 
 type ResultState =
   | { kind: "analysis"; data: NewsAnalysis }
@@ -72,6 +83,14 @@ const tabs: Array<{
     icon: Link2,
     description: "Validate a news article link with AI context analysis.",
     placeholder: "Paste the article or social post URL...",
+    accept: "",
+  },
+  {
+    id: "news",
+    label: "Latest News",
+    icon: Search,
+    description: "Fetch newest articles based on a topic and verify them.",
+    placeholder: "Enter a topic like AI, politics, cricket, health...",
     accept: "",
   },
   {
@@ -277,16 +296,42 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<InputMode>("text");
   const [textValue, setTextValue] = useState("");
   const [urlValue, setUrlValue] = useState("");
+  const [newsTopic, setNewsTopic] = useState("");
+  const [newsArticles, setNewsArticles] = useState<FetchedArticle[]>([]);
+  const [fetchingNews, setFetchingNews] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState>(null);
   const [copyMessage, setCopyMessage] = useState<string>("");
+  const [linkedinUserId, setLinkedinUserId] = useState<string>("");
+  const [linkedinStatus, setLinkedinStatus] = useState<string>("");
+  const [postingToLinkedIn, setPostingToLinkedIn] = useState(false);
   const [expandedPanel, setExpandedPanel] = useState<string>("ai");
   const dragRef = useRef<HTMLDivElement | null>(null);
 
   const activeTabConfig = useMemo(() => tabs.find((tab) => tab.id === activeTab) ?? tabs[0], [activeTab]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const userIdFromUrl = params.get("linkedin_user_id");
+    const loginStatus = params.get("linkedin_login");
+
+    if (userIdFromUrl) {
+      localStorage.setItem("linkedin_user_id", userIdFromUrl);
+      setLinkedinUserId(userIdFromUrl);
+    } else {
+      const storedUserId = localStorage.getItem("linkedin_user_id");
+      if (storedUserId) {
+        setLinkedinUserId(storedUserId);
+      }
+    }
+
+    if (loginStatus === "success") {
+      setLinkedinStatus("LinkedIn login successful. You can now post the generated blog.");
+    }
+  }, []);
 
 
   const handleSelectTab = (tabId: InputMode) => {
@@ -294,6 +339,7 @@ export default function HomePage() {
     setErrorMessage(null);
     setResult(null);
     setCopyMessage("");
+    setNewsArticles([]);
   };
 
   const handleFileChange = (file: File | null) => {
@@ -359,158 +405,39 @@ export default function HomePage() {
     return formData;
   };
 
-<<<<<<< HEAD
-  // const handleVerify = async () => {
-  //   setErrorMessage(null);
-  //   setResult(null);
-  //   setCopyMessage("");
-  //   const formData = buildFormData();
-  //   if (!formData) {
-  //     return;
-  //   }
-
-  //   const endpoint =
-  //     activeTab === "text"
-  //       ? "check-text"
-  //       : activeTab === "url"
-  //       ? "check-url"
-  //       : activeTab === "pdf"
-  //       ? "check-pdf"
-  //       : "check-image";
-
-  //   setLoading(true);
-
-  //   try {
-  //     const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-
-  //     const rawBody = await response.text();
-  //     if (!response.ok) {
-  //       throw new Error(rawBody || "Verification request failed.");
-  //     }
-
-  //     let parsedBody: unknown;
-  //     try {
-  //       parsedBody = JSON.parse(rawBody);
-  //     } catch {
-  //       parsedBody = rawBody;
-  //     }
-
-  //     const responseText =
-  //       typeof parsedBody === "string"
-  //         ? parsedBody
-  //         : parsedBody && typeof parsedBody === "object"
-  //         ? (parsedBody as Record<string, unknown>).result ||
-  //           (parsedBody as Record<string, unknown>).detail ||
-  //           (parsedBody as Record<string, unknown>).message ||
-  //           JSON.stringify(parsedBody, null, 2)
-  //         : rawBody;
-
-  //     if (activeTab === "image") {
-  //       setResult({ kind: "image", data: parseImageAnalysis(String(responseText)) });
-  //     } else {
-  //       setResult({ kind: "analysis", data: parseNewsAnalysis(String(responseText)) });
-  //     }
-  //   } catch (error) {
-  //     setErrorMessage((error as Error)?.message || "Unable to verify news. Try again.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-const handleVerify = async () => {
-  setErrorMessage(null);
-  setResult(null);
-  setCopyMessage("");
-
-  const formData = buildFormData();
-
-  if (!formData) {
-    return;
-  }
-
-  const endpoint =
-    activeTab === "text"
-      ? "check-text"
-      : activeTab === "url"
-      ? "check-url"
-      : activeTab === "pdf"
-      ? "check-pdf"
-      : "check-image";
-
-  setLoading(true);
-
-  try {
-    const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error("Backend request failed.");
-    }
-
-    const parsedBody = await response.json();
-
-    // IMAGE RESPONSE
-    if (activeTab === "image") {
-      const imageData = parsedBody;
-
-      const combinedImageText = `
-OCR Text:
-${imageData?.ocr_text || ""}
-
-Image Detection:
-${imageData?.ai_image_detection || ""}
-
-Fake News Analysis:
-${imageData?.fake_news_analysis?.verification_result || ""}
-
-LinkedIn Post:
-${imageData?.fake_news_analysis?.linkedin_post || ""}
-`;
-
-      setResult({
-        kind: "image",
-        data: parseImageAnalysis(combinedImageText),
-      });
-
-=======
   const handleVerify = async () => {
     setErrorMessage(null);
     setResult(null);
     setCopyMessage("");
+    setLinkedinStatus("");
 
-    const formData = buildFormData();
-    if (!formData) {
->>>>>>> c2ec1eb (Add LinkedIn OAuth publisher feature)
+    if (activeTab === "news") {
+      await handleFetchLatestNews();
       return;
     }
 
-    // TEXT / URL / PDF RESPONSE
-    const verificationResult =
-      parsedBody?.verification_result || "";
+    const formData = buildFormData();
+    if (!formData) {
+      return;
+    }
 
-    const linkedinPost =
-      parsedBody?.linkedin_post || "";
+    const endpoint =
+      activeTab === "text"
+        ? "check-text"
+        : activeTab === "url"
+        ? "check-url"
+        : activeTab === "pdf"
+        ? "check-pdf"
+        : "check-image";
 
-    const combinedText = `
-${verificationResult}
+    setLoading(true);
 
-<<<<<<< HEAD
-LinkedIn Post:
-${linkedinPost}
-`;
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/${endpoint}`, {
+        method: "POST",
+        body: formData,
+      });
 
-    setResult({
-      kind: "analysis",
-      data: parseNewsAnalysis(combinedText),
-    });
-
-  } catch (error) {
-    console.error(error);
-=======
       const rawBody = await response.text();
       let data: any = null;
 
@@ -571,16 +498,166 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
       setLoading(false);
     }
   };
->>>>>>> c2ec1eb (Add LinkedIn OAuth publisher feature)
 
-    setErrorMessage(
-      (error as Error)?.message ||
-        "Unable to verify news. Try again."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleLinkedInLogin = async () => {
+    setLinkedinStatus("Opening LinkedIn login...");
+    console.log("LinkedIn login URL:", `${BACKEND_BASE_URL}/linkedin/login`);
+
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/linkedin/login`);
+      const data = await response.json();
+
+      if (!response.ok || !data?.login_url) {
+        throw new Error(data?.detail || "Could not start LinkedIn login.");
+      }
+
+      window.location.href = data.login_url;
+    } catch (error) {
+      setLinkedinStatus((error as Error)?.message || "LinkedIn login failed.");
+    }
+  };
+
+  const handlePostToLinkedIn = async (linkedInPost: string) => {
+    const finalUserId = linkedinUserId.trim() || localStorage.getItem("linkedin_user_id") || "";
+
+    if (!finalUserId) {
+      setLinkedinStatus("Please login with LinkedIn first, or paste the LinkedIn user ID returned after OAuth login.");
+      return;
+    }
+
+    if (!linkedInPost || linkedInPost === "No LinkedIn post was returned.") {
+      setLinkedinStatus("No LinkedIn blog post is available to publish.");
+      return;
+    }
+
+    setPostingToLinkedIn(true);
+    setLinkedinStatus("Publishing to LinkedIn...");
+
+    try {
+      const formData = new FormData();
+      formData.append("linkedin_user_id", finalUserId);
+      formData.append("post_text", linkedInPost);
+
+      const response = await fetch(`${BACKEND_BASE_URL}/linkedin/post`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data?.success) {
+        setLinkedinStatus("Posted to LinkedIn successfully.");
+      } else {
+        setLinkedinStatus(data?.message || "LinkedIn posting failed. Check backend logs.");
+        console.log("LinkedIn post response:", data);
+      }
+    } catch (error) {
+      setLinkedinStatus((error as Error)?.message || "LinkedIn posting failed.");
+    } finally {
+      setPostingToLinkedIn(false);
+    }
+  };
+
+  const handleFetchLatestNews = async () => {
+    setErrorMessage(null);
+    setResult(null);
+    setCopyMessage("");
+    setLinkedinStatus("");
+
+    if (!newsTopic.trim()) {
+      setErrorMessage("Enter a topic to fetch latest news articles.");
+      return;
+    }
+
+    setFetchingNews(true);
+    setNewsArticles([]);
+
+    try {
+      const formData = new FormData();
+      formData.append("topic", newsTopic.trim());
+
+      const response = await fetch(`${BACKEND_BASE_URL}/fetch-news`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.message || data?.detail || "Failed to fetch latest news.");
+      }
+
+      setNewsArticles(data?.articles || []);
+      if (!data?.articles?.length) {
+        setErrorMessage("No recent articles found for this topic.");
+      }
+    } catch (error) {
+      setErrorMessage((error as Error)?.message || "Unable to fetch latest news.");
+    } finally {
+      setFetchingNews(false);
+    }
+  };
+
+  const handleVerifyFetchedArticle = async (articleUrl: string) => {
+    setErrorMessage(null);
+    setResult(null);
+    setCopyMessage("");
+    setLinkedinStatus("");
+
+    if (!articleUrl) {
+      setErrorMessage("This article does not have a valid URL to verify.");
+      return;
+    }
+
+    setActiveTab("url");
+    setUrlValue(articleUrl);
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("url", articleUrl);
+
+      const response = await fetch(`${BACKEND_BASE_URL}/check-url`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const rawBody = await response.text();
+      let data: any = null;
+
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        data = rawBody;
+      }
+
+      if (!response.ok) {
+        const backendError =
+          typeof data === "object" && data !== null
+            ? data.detail || data.message || JSON.stringify(data)
+            : String(data || "Article verification failed.");
+
+        throw new Error(backendError);
+      }
+
+      const parsedAnalysis = parseNewsAnalysis(
+        data?.verification_result || "No verification result was returned."
+      );
+
+      setResult({
+        kind: "analysis",
+        data: {
+          ...parsedAnalysis,
+          linkedInPost: data?.linkedin_post || "No LinkedIn post was returned.",
+        },
+      });
+    } catch (error) {
+      setErrorMessage((error as Error)?.message || "Unable to verify selected article.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const activeInput = () => {
     if (activeTab === "text") {
       return (
@@ -603,6 +680,23 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
           className="w-full rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/80 focus:ring-2 focus:ring-emerald-400/20"
           placeholder={activeTabConfig.placeholder}
         />
+      );
+    }
+
+    if (activeTab === "news") {
+      return (
+        <div className="space-y-4">
+          <input
+            value={newsTopic}
+            onChange={(event) => setNewsTopic(event.target.value)}
+            type="text"
+            className="w-full rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/80 focus:ring-2 focus:ring-emerald-400/20"
+            placeholder={activeTabConfig.placeholder}
+          />
+          <p className="text-sm text-zinc-400">
+            This uses the News Fetcher Agent to collect recent articles for your topic. After fetching, choose any article to verify.
+          </p>
+        </div>
       );
     }
 
@@ -775,6 +869,45 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
                   </div>
                 </div>
                 <div>{activeInput()}</div>
+
+                {activeTab === "news" && newsArticles.length > 0 ? (
+                  <div className="mt-6 space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-sm font-semibold text-emerald-100">Latest articles found</p>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400">
+                        {newsArticles.length} articles
+                      </span>
+                    </div>
+                    <div className="grid gap-4">
+                      {newsArticles.map((article, index) => (
+                        <div
+                          key={`${article.url}-${index}`}
+                          className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4"
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-100">{article.title || "Untitled article"}</p>
+                              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                                {article.description || article.content || "No description available."}
+                              </p>
+                              <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
+                                {article.source ? <span>{article.source}</span> : null}
+                                {article.published_at ? <span>{article.published_at}</span> : null}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleVerifyFetchedArticle(article.url)}
+                              disabled={loading}
+                              className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Verify this article
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-emerald-400/10 bg-emerald-400/5 p-5">
@@ -797,16 +930,16 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
               </div>
               <button
                 onClick={handleVerify}
-                disabled={loading}
+                disabled={loading || fetchingNews}
                 className="inline-flex min-h-[54px] items-center justify-center rounded-full bg-emerald-400 px-6 py-4 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? (
+                {loading || fetchingNews ? (
                   <>
-                    <Loader2 className="mr-3 h-5 w-5 animate-spin" /> Verifying...
+                    <Loader2 className="mr-3 h-5 w-5 animate-spin" /> {activeTab === "news" ? "Fetching..." : "Verifying..."}
                   </>
                 ) : (
                   <>
-                    <Zap className="mr-3 h-5 w-5" /> Verify News
+                    <Zap className="mr-3 h-5 w-5" /> {activeTab === "news" ? "Fetch Latest News" : "Verify News"}
                   </>
                 )}
               </button>
@@ -820,6 +953,30 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
                 </div>
               </div>
             ) : null}
+
+            <div className="mt-5 rounded-[2rem] border border-white/10 bg-zinc-950/70 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-emerald-100">Optional LinkedIn Publisher</p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Login with LinkedIn first. The ID is filled automatically after OAuth redirect. For backend-only testing, you can paste the returned LinkedIn user ID here.
+                  </p>
+                  <input
+                    value={linkedinUserId}
+                    onChange={(event) => setLinkedinUserId(event.target.value)}
+                    className="mt-4 w-full rounded-3xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/80 focus:ring-2 focus:ring-emerald-400/20"
+                    placeholder="LinkedIn user ID after login"
+                  />
+                  {linkedinStatus ? <p className="mt-3 text-sm text-emerald-300">{linkedinStatus}</p> : null}
+                </div>
+                <button
+                  onClick={handleLinkedInLogin}
+                  className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+                >
+                  Login with LinkedIn
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -991,17 +1148,28 @@ ${data?.fake_news_analysis?.verification_result || "No fake news analysis was re
                           <p className="text-sm uppercase tracking-[0.28em] text-emerald-300/80">LinkedIn copy</p>
                           <h3 className="mt-3 text-xl font-semibold text-zinc-100">Shareable AI summary</h3>
                         </div>
-                        <button
-                          onClick={() => copyToClipboard(result.data.linkedInPost, setCopyMessage)}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 transition hover:border-emerald-400/30 hover:bg-white/10"
-                        >
-                          <Copy className="h-4 w-4" /> Copy
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => copyToClipboard(result.data.linkedInPost, setCopyMessage)}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-300 transition hover:border-emerald-400/30 hover:bg-white/10"
+                          >
+                            <Copy className="h-4 w-4" /> Copy
+                          </button>
+                          <button
+                            onClick={() => handlePostToLinkedIn(result.data.linkedInPost)}
+                            disabled={postingToLinkedIn}
+                            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {postingToLinkedIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                            Post to LinkedIn
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-zinc-300 whitespace-pre-line">
                         {result.data.linkedInPost}
                       </div>
                       {copyMessage ? <p className="mt-3 text-sm text-emerald-300">{copyMessage}</p> : null}
+                    {linkedinStatus ? <p className="mt-2 text-sm text-emerald-300">{linkedinStatus}</p> : null}
                     </div>
 
                     <div className="rounded-[1.75rem] border border-white/10 bg-zinc-950/80 p-6">

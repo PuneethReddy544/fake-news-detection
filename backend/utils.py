@@ -146,3 +146,52 @@ Warning: This is visual AI analysis only, not forensic proof.
 
     except Exception as e:
         return f"AI image detection failed: {str(e)}"
+
+def fetch_latest_news_by_topic(topic: str, max_results: int = 5):
+    try:
+        api_key = os.getenv("GNEWS_API_KEY")
+
+        if not api_key:
+            return {
+                "success": False,
+                "message": "GNEWS_API_KEY is missing"
+            }
+
+        response = requests.get(
+            "https://gnews.io/api/v4/search",
+            params={
+                "q": topic,
+                "lang": "en",
+                "country": "in",
+                "max": max_results,
+                "sortby": "publishedAt",
+                "apikey": api_key,
+            },
+            timeout=15,
+        )
+
+        data = response.json()
+
+        articles = []
+
+        for article in data.get("articles", []):
+            articles.append({
+                "title": article.get("title"),
+                "description": article.get("description"),
+                "content": article.get("content"),
+                "url": article.get("url"),
+                "published_at": article.get("publishedAt"),
+                "source": article.get("source", {}).get("name"),
+            })
+
+        return {
+            "success": True,
+            "topic": topic,
+            "articles": articles
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
